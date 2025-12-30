@@ -7,6 +7,7 @@ The main GUI container with menu bar, toolbar, sidebar, and canvas.
 import customtkinter as ctk
 from tkinter import messagebox
 from typing import Optional
+from pathlib import Path
 import sys
 import os
 
@@ -29,6 +30,7 @@ from core import (
     EdgeDetectOperation,
     EmbossOperation,
     PosterizeOperation,
+    CompositeAdjustmentOperation,
 )
 from utils import FileHandler
 from gui.image_canvas import ImageCanvas
@@ -61,7 +63,7 @@ class MainWindow(ctk.CTk):
         ctk.set_default_color_theme("dark-blue")
         
         # Window setup
-        self.title("SimpleImage")
+        self.title("ClaRity Image Processing")
         self.geometry("1280x800")
         self.minsize(900, 600)
         
@@ -88,6 +90,9 @@ class MainWindow(ctk.CTk):
         
         # Handle window close
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        # Set window icon
+        self._set_icon()
 
     def _create_toolbar(self) -> None:
         """Create the top toolbar."""
@@ -200,14 +205,35 @@ class MainWindow(ctk.CTk):
         )
         self._redo_btn.pack(side="left", padx=2)
         
-        # Title
+        # Logo and Title
+        brand_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        brand_frame.pack(side="left", padx=20)
+        
+        # Load and display logo
+        try:
+            assets_dir = Path(__file__).parent.parent / "assets"
+            logo_path = assets_dir / "logo.png"
+            if logo_path.exists():
+                from PIL import Image, ImageTk
+                logo_img = Image.open(logo_path)
+                logo_img = logo_img.resize((28, 28), Image.Resampling.LANCZOS)
+                self._logo_photo = ImageTk.PhotoImage(logo_img)
+                logo_label = ctk.CTkLabel(
+                    brand_frame,
+                    image=self._logo_photo,
+                    text="",
+                )
+                logo_label.pack(side="left", padx=(0, 8))
+        except Exception:
+            pass  # Skip logo if it can't be loaded
+        
         title_label = ctk.CTkLabel(
-            toolbar,
-            text="SIMPLE IMAGE",
+            brand_frame,
+            text="ClaRity",
             font=ctk.CTkFont(family="Consolas", size=16, weight="bold"),
             text_color=self._accent,
         )
-        title_label.pack(side="left", padx=20)
+        title_label.pack(side="left")
 
     def _create_main_area(self) -> None:
         """Create the main content area with canvas and sidebar."""
@@ -252,9 +278,7 @@ class MainWindow(ctk.CTk):
         self._adjustment_panel = AdjustmentPanel(
             sidebar,
             fg_color="transparent",
-            on_brightness=self._adjust_brightness,
-            on_contrast=self._adjust_contrast,
-            on_saturation=self._adjust_saturation,
+            on_apply_adjustments=self._apply_adjustments,
             on_grayscale=self._apply_grayscale,
             on_invert=self._apply_invert,
         )
@@ -442,33 +466,32 @@ class MainWindow(ctk.CTk):
 
     # =========== Adjustment Operations ===========
 
-    def _adjust_brightness(self, factor: float) -> None:
+    def _apply_adjustments(self, brightness: int, contrast: int, saturation: int) -> None:
+        """
+        Apply brightness, contrast, and saturation adjustments from original image.
+        
+        All adjustments are absolute values from -100 to 100.
+        Setting all to 0 resets to the original image.
+        """
         if not self._processor.has_image:
             return
-        try:
-            op = BrightnessOperation(factor)
-            self._processor.apply_operation(op)
-            self._update_status(f"Brightness: {factor:.2f}x")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def _adjust_contrast(self, factor: float) -> None:
-        if not self._processor.has_image:
+        
+        # All zeros = reset to original
+        if brightness == 0 and contrast == 0 and saturation == 0:
+            if self._processor.original_image:
+                self._processor.reset_to_original()
+                self._update_status("Reset to original")
             return
+        
         try:
-            op = ContrastOperation(factor)
+            op = CompositeAdjustmentOperation(
+                self._processor.original_image,
+                brightness=brightness,
+                contrast=contrast,
+                saturation=saturation
+            )
             self._processor.apply_operation(op)
-            self._update_status(f"Contrast: {factor:.2f}x")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def _adjust_saturation(self, factor: float) -> None:
-        if not self._processor.has_image:
-            return
-        try:
-            op = SaturationOperation(factor)
-            self._processor.apply_operation(op)
-            self._update_status(f"Saturation: {factor:.2f}x")
+            self._update_status(f"Adjustments: B={brightness} C={contrast} S={saturation}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
@@ -594,6 +617,48 @@ class MainWindow(ctk.CTk):
     def _on_close(self) -> None:
         """Handle window close."""
         self.destroy()
+
+    def _set_icon(self) -> None:
+        """Set the window icon."""
+        try:
+            # Get the assets directory relative to this file
+            assets_dir = Path(__file__).parent.parent / "assets"
+            icon_path = assets_dir / "logo.png"
+            
+            if icon_path.exists():
+                from PIL import Image, ImageTk
+                import tempfile
+                
+                # Load the PNG image
+                icon_image = Image.open(icon_path)
+                
+                # For Windows, we need to use iconbitmap with an ICO file
+                # Create a temporary ICO file
+                ico_path = assets_dir / "logo.ico"
+                if not ico_path.exists():
+                    # Create ICO with multiple sizes for best quality
+                    icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128)]
+                    icons = []
+                    for size in icon_sizes:
+                        resized = icon_image.resize(size, Image.Resampling.LANCZOS)
+                        icons.append(resized)
+                    icons[0].save(ico_path, format='ICO', sizes=icon_sizes)
+                
+                # Set the icon using iconbitmap (works on Windows)
+                self.iconbitmap(str(ico_path))
+        except Exception as e:
+            # Fallback to iconphoto if iconbitmap fails
+            try:
+                assets_dir = Path(__file__).parent.parent / "assets"
+                icon_path = assets_dir / "logo.png"
+                if icon_path.exists():
+                    from PIL import Image, ImageTk
+                    icon_image = Image.open(icon_path)
+                    icon_photo = ImageTk.PhotoImage(icon_image)
+                    self.iconphoto(True, icon_photo)
+                    self._icon_photo = icon_photo
+            except Exception:
+                pass  # Silently fail if icon can't be loaded
 
     def run(self) -> None:
         """Start the application."""

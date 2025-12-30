@@ -16,6 +16,7 @@ from .operations import (
     EdgeDetectOperation,
     EmbossOperation,
     PosterizeOperation,
+    CompositeAdjustmentOperation,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "EdgeDetectOperation",
     "EmbossOperation",
     "PosterizeOperation",
+    "CompositeAdjustmentOperation",
 ]

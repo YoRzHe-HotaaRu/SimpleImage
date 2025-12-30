@@ -212,23 +212,32 @@ class TransformPanel(CollapsiblePanel):
 
 
 class AdjustmentPanel(CollapsiblePanel):
-    """Panel for color adjustments (brightness, contrast, saturation)."""
+    """
+    Panel for color adjustments (brightness, contrast, saturation).
+    
+    Uses absolute adjustment values from -100 to 100 where 0 means no change.
+    All adjustments are applied together from the original image to prevent
+    cumulative stacking of effects.
+    """
 
     def __init__(
         self,
         master,
-        on_brightness: Optional[Callable] = None,
-        on_contrast: Optional[Callable] = None,
-        on_saturation: Optional[Callable] = None,
+        on_apply_adjustments: Optional[Callable[[int, int, int], None]] = None,
         on_grayscale: Optional[Callable] = None,
         on_invert: Optional[Callable] = None,
         **kwargs
     ):
+        """
+        Args:
+            master: Parent widget.
+            on_apply_adjustments: Callback with (brightness, contrast, saturation) values.
+            on_grayscale: Callback for grayscale operation.
+            on_invert: Callback for invert operation.
+        """
         super().__init__(master, title="ADJUSTMENTS", **kwargs)
         
-        self._on_brightness = on_brightness
-        self._on_contrast = on_contrast
-        self._on_saturation = on_saturation
+        self._on_apply_adjustments = on_apply_adjustments
         self._on_grayscale = on_grayscale
         self._on_invert = on_invert
         
@@ -337,26 +346,16 @@ class AdjustmentPanel(CollapsiblePanel):
         self._sliders[key] = (slider, value_label, default)
 
     def _apply_adjustments(self) -> None:
+        """Collect all slider values and pass to the callback."""
         brightness = int(self._sliders["brightness"][0].get())
         contrast = int(self._sliders["contrast"][0].get())
         saturation = int(self._sliders["saturation"][0].get())
         
-        # Convert to factor (0 = 0.0, 100 = 2.0)
-        if brightness != 0 and self._on_brightness:
-            factor = 1.0 + (brightness / 100)
-            self._on_brightness(factor)
-        
-        if contrast != 0 and self._on_contrast:
-            factor = 1.0 + (contrast / 100)
-            self._on_contrast(factor)
-        
-        if saturation != 0 and self._on_saturation:
-            factor = 1.0 + (saturation / 100)
-            self._on_saturation(factor)
-        
-        self._reset_sliders()
+        if self._on_apply_adjustments:
+            self._on_apply_adjustments(brightness, contrast, saturation)
 
     def _reset_sliders(self) -> None:
+        """Reset all sliders to their default values."""
         for key, (slider, label, default) in self._sliders.items():
             slider.set(default)
             label.configure(text=str(default))

@@ -293,3 +293,57 @@ class PosterizeOperation(Operation):
         else:
             rgb_image = image.convert("RGB")
             return ImageOps.posterize(rgb_image, self.bits)
+
+
+class CompositeAdjustmentOperation(Operation):
+    """
+    Apply brightness, contrast, and saturation adjustments from an original image.
+    
+    This operation always applies adjustments relative to a reference image (typically
+    the original), preventing cumulative stacking of effects. Setting all values to 0
+    effectively resets to the original image.
+    """
+
+    def __init__(
+        self,
+        original_image: Image.Image,
+        brightness: int = 0,
+        contrast: int = 0,
+        saturation: int = 0
+    ):
+        """
+        Args:
+            original_image: The reference image to apply adjustments from.
+            brightness: Adjustment value from -100 to 100. 0 = no change.
+            contrast: Adjustment value from -100 to 100. 0 = no change.
+            saturation: Adjustment value from -100 to 100. 0 = no change.
+        """
+        super().__init__("Adjustments")
+        self._original = original_image.copy()
+        self._brightness = max(-100, min(100, brightness))
+        self._contrast = max(-100, min(100, contrast))
+        self._saturation = max(-100, min(100, saturation))
+
+    def execute(self, image: Image.Image) -> Image.Image:
+        self.backup(image)
+        
+        # Start from the original image, not the current state
+        result = self._original.copy()
+        
+        # Apply brightness adjustment (-100 to 100 -> factor 0.0 to 2.0)
+        if self._brightness != 0:
+            factor = 1.0 + (self._brightness / 100)
+            result = ImageEnhance.Brightness(result).enhance(factor)
+        
+        # Apply contrast adjustment (-100 to 100 -> factor 0.0 to 2.0)
+        if self._contrast != 0:
+            factor = 1.0 + (self._contrast / 100)
+            result = ImageEnhance.Contrast(result).enhance(factor)
+        
+        # Apply saturation adjustment (-100 to 100 -> factor 0.0 to 2.0)
+        if self._saturation != 0:
+            factor = 1.0 + (self._saturation / 100)
+            result = ImageEnhance.Color(result).enhance(factor)
+        
+        return result
+
